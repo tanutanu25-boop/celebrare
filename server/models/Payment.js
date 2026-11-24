@@ -12,6 +12,19 @@ const paymentSchema = new mongoose.Schema(
     photographerId: {
       type: String,
       required: true,
+      trim: true,
+    },
+
+    eventId: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    guestId: {
+      type: String,
+      required: true,
+      trim: true,
     },
 
     amount: {

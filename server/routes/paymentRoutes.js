@@ -8,6 +8,7 @@ import {
 
 import Payment from "../models/Payment.js";
 import Photographer from "../models/Photographer.js";
+import Event from "../models/Event.js";
 
 const router = express.Router();
 
@@ -18,6 +19,8 @@ router.post("/create", async (req, res) => {
   try {
     const {
       photographerId,
+      eventId,
+      guestId,
       amount,
       selectedPhotoIds,
     } = req.body;
@@ -25,11 +28,17 @@ router.post("/create", async (req, res) => {
     // Validate input
     if (
       !photographerId ||
+      !eventId ||
+      !guestId ||
+      typeof guestId !== "string" ||
+      !guestId.trim() ||
       !Number.isInteger(amount) ||
       amount <= 0 ||
       !Array.isArray(selectedPhotoIds) ||
       selectedPhotoIds.length === 0 ||
-      !selectedPhotoIds.every(Number.isInteger)
+      !selectedPhotoIds.every(
+        (id) => Number.isInteger(id) && id > 0
+      )
     ) {
       return res.status(400).json({
         success: false,
@@ -49,6 +58,19 @@ router.post("/create", async (req, res) => {
       });
     }
 
+    // Find event belonging to this photographer
+    const event = await Event.findOne({
+      eventId,
+      photographerId,
+    });
+
+    if (!event) {
+      return res.status(404).json({
+        success: false,
+        message: "Event not found for this photographer",
+      });
+    }
+
     // Generate unique payment request ID
     const paymentRequestId = randomUUID();
 
@@ -58,6 +80,8 @@ router.post("/create", async (req, res) => {
     const payment = await Payment.create({
       paymentRequestId,
       photographerId,
+      eventId,
+      guestId: guestId.trim(),
       amount,
       selectedPhotoIds,
       expiresAt,
@@ -77,7 +101,11 @@ router.post("/create", async (req, res) => {
       message: "Demo payment request created",
       payment: {
         paymentRequestId: payment.paymentRequestId,
+        photographerId: payment.photographerId,
+        eventId: payment.eventId,
+        guestId: payment.guestId,
         amount: payment.amount,
+        selectedPhotoIds: payment.selectedPhotoIds,
         status: payment.status,
         expiresAt: payment.expiresAt,
         upiPaymentLink,
@@ -126,6 +154,8 @@ router.get("/:paymentRequestId", async (req, res) => {
       payment: {
         paymentRequestId: payment.paymentRequestId,
         photographerId: payment.photographerId,
+        eventId: payment.eventId,
+        guestId: payment.guestId,
         amount: payment.amount,
         selectedPhotoIds: payment.selectedPhotoIds,
         status: payment.status,
@@ -273,6 +303,9 @@ router.post("/webhook/verify", async (req, res) => {
       message: "Demo webhook accepted",
       payment: {
         paymentRequestId: updatedPayment.paymentRequestId,
+        photographerId: updatedPayment.photographerId,
+        eventId: updatedPayment.eventId,
+        guestId: updatedPayment.guestId,
         transactionId: updatedPayment.transactionId,
         status: updatedPayment.status,
       },
