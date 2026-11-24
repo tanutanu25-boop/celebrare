@@ -7,6 +7,7 @@ import dotenv from "dotenv";
 import photographerRoutes from "./routes/photographerRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import eventRoutes from "./routes/eventRoutes.js";
+import photoRoutes from "./routes/photoRoutes.js";
 
 dotenv.config();
 
@@ -28,6 +29,9 @@ app.use("/api/photographers", photographerRoutes);
 app.use("/api/payments", paymentRoutes);
 
 app.use("/api/events", eventRoutes);
+
+// Photo API Routes
+app.use("/api/photos", photoRoutes);
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URI)
