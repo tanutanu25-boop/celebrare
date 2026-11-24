@@ -1,22 +1,42 @@
 
-const express = require("express");
-const cors = require("cors");
-const mongoose = require("mongoose");
-require("dotenv").config();
+import express from "express";
+import cors from "cors";
+import mongoose from "mongoose";
+import dotenv from "dotenv";
+
+import photographerRoutes from "./routes/photographerRoutes.js";
+import paymentRoutes from "./routes/paymentRoutes.js";
+
+dotenv.config();
 
 const app = express();
 
 app.use(cors());
-app.use(express.json());
 
+app.use(
+  express.json({
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
+// Photographer API Routes
+app.use("/api/photographers", photographerRoutes);
+
+// Payment API Routes
+app.use("/api/payments", paymentRoutes);
+
+// MongoDB Connection
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected Successfully!"))
   .catch((err) => console.log("MongoDB Error:", err.message));
 
+// Home Route
 app.get("/", (req, res) => {
   res.send("Celebrare Backend is Running!");
 });
 
+// Health Check API
 app.get("/api/health", (req, res) => {
   res.json({
     success: true,
@@ -24,6 +44,7 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+// Test API
 app.get("/api/test", (req, res) => {
   res.json({
     project: "Celebrare",
