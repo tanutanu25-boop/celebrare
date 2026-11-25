@@ -1,145 +1,300 @@
 
-import { useState } from "react";
-import { QRCodeSVG } from "qrcode.react";
+import { useEffect, useState } from "react";
 import "./App.css";
 
-const photos = [
-  {
-    id: 1,
-    name: "Wedding Ceremony",
-    image:
-      "https://images.unsplash.com/photo-1519741497674-611481863552?w=600",
-  },
-  {
-    id: 2,
-    name: "Beautiful Couple",
-    image:
-      "https://images.unsplash.com/photo-1537633552985-df8429e8048b?w=600",
-  },
-  {
-    id: 3,
-    name: "Wedding Celebration",
-    image:
-      "https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?w=600",
-  },
-  {
-    id: 4,
-    name: "Special Moments",
-    image:
-      "https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=600",
-  },
-  {
-    id: 5,
-    name: "Wedding Memories",
-    image:
-      "https://images.unsplash.com/photo-1507504031003-b417219a0fde?w=600",
-  },
-  {
-    id: 6,
-    name: "Celebration",
-    image:
-      "https://images.unsplash.com/photo-1519225421980-888cbf7a5b9e?w=600",
-  },
-];
+import Navbar from "./components/Navbar";
+import Dashboard from "./components/Dashboard";
+import GuestGallery from "./components/GuestGallery";
+import ManagePhotos from "./components/ManagePhotos";
+import PaymentSection from "./components/PaymentSection";
+
+const API_URL = "http://localhost:5000/api";
 
 function App() {
-  const [activeTab, setActiveTab] = useState("dashboard");
-  const [selectedPhotos, setSelectedPhotos] = useState([]);
-  const [showPayment, setShowPayment] = useState(false);
-  const [showQR, setShowQR] = useState(false);
-
+  const photographerId = "photo101";
+  const guestId = "guest105";
   const pricePerPhoto = 20;
+
+  const [activeTab, setActiveTab] = useState("dashboard");
+
+  const [events, setEvents] = useState([]);
+  const [selectedEventId, setSelectedEventId] = useState("");
+
+  const [photos, setPhotos] = useState([]);
+  const [selectedPhotos, setSelectedPhotos] = useState([]);
+
+  const [photoUrl, setPhotoUrl] = useState("");
+  const [addingPhoto, setAddingPhoto] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+
+  const [paymentRequestId, setPaymentRequestId] = useState("");
+  const [paymentStatus, setPaymentStatus] = useState("");
+  const [unlockedPhotos, setUnlockedPhotos] = useState([]);
+  const [showPayment, setShowPayment] = useState(false);
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const selectedEvent = events.find(
+    (event) => event.eventId === selectedEventId
+  );
+
   const totalAmount = selectedPhotos.length * pricePerPhoto;
 
-  // Demo photographer details
-  const photographerUPI = "rahul@upi";
-  const photographerName = "Rahul Photographer";
+  // Fetch events
+  useEffect(() => {
+    async function fetchEvents() {
+      try {
+        const response = await fetch(
+          `${API_URL}/events/photographer/${photographerId}`
+        );
 
-  // Generate UPI payment link
-  const upiPaymentLink = `upi://pay?pa=${photographerUPI}&pn=${encodeURIComponent(
-    photographerName
-  )}&am=${totalAmount}&cu=INR&tn=Celebrare%20Photo%20Payment`;
+        const data = await response.json();
 
-  function togglePhoto(id) {
+        if (!response.ok || !data.success) {
+          throw new Error(data.message || "Could not load events");
+        }
+
+        setEvents(data.events);
+
+        if (data.events.length > 0) {
+          setSelectedEventId(data.events[0].eventId);
+        }
+      } catch (err) {
+        setError(err.message);
+      }
+    }
+
+    fetchEvents();
+  }, []);
+
+  // Fetch photos
+  useEffect(() => {
+    if (!selectedEventId) {
+      setPhotos([]);
+      return;
+    }
+
+    async function fetchPhotos() {
+      try {
+        setLoading(true);
+        setError("");
+
+        const response = await fetch(
+          `${API_URL}/photos/event/${selectedEventId}`
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.message || "Could not load photos");
+        }
+
+        setPhotos(data.photos);
+        setSelectedPhotos([]);
+      } catch (err) {
+        setError(err.message);
+        setPhotos([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchPhotos();
+  }, [selectedEventId]);
+
+  // Refresh photos
+  async function refreshPhotos() {
+    if (!selectedEventId) return;
+
+    const response = await fetch(
+      `${API_URL}/photos/event/${selectedEventId}`
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || "Could not refresh photos");
+    }
+
+    setPhotos(data.photos);
+  }
+
+  // Add photo
+  async function addPhoto(event) {
+    event.preventDefault();
+
+    if (!selectedEventId || !photoUrl.trim()) {
+      setError("Please select an event and enter an image URL");
+      return;
+    }
+
+    setAddingPhoto(true);
+    setError("");
+    setSuccessMessage("");
+
+    try {
+      const response = await fetch(`${API_URL}/photos/add`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          eventId: selectedEventId,
+          photoUrl: photoUrl.trim(),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Could not add photo");
+      }
+
+      setPhotoUrl("");
+      setSuccessMessage("Photo added successfully!");
+
+      await refreshPhotos();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setAddingPhoto(false);
+    }
+  }
+
+  // Select or unselect photo
+  function togglePhoto(photoId) {
     setSelectedPhotos((previous) =>
-      previous.includes(id)
-        ? previous.filter((photoId) => photoId !== id)
-        : [...previous, id]
+      previous.includes(photoId)
+        ? previous.filter((id) => id !== photoId)
+        : [...previous, photoId]
     );
   }
 
-  function openPayment() {
+  // Create payment request (demo only)
+  async function createPaymentRequest() {
     if (selectedPhotos.length === 0) {
-      alert("Please select at least one photo!");
+      setError("Please select at least one photo!");
       return;
     }
 
-    setShowQR(false);
-    setShowPayment(true);
-    setActiveTab("gallery");
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch(`${API_URL}/payments/create`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          photographerId,
+          eventId: selectedEventId,
+          guestId,
+          amount: totalAmount,
+          selectedPhotoIds: selectedPhotos,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Payment request failed");
+      }
+
+      setPaymentRequestId(data.payment.paymentRequestId);
+      setPaymentStatus(data.payment.status);
+      setUnlockedPhotos([]);
+      setShowPayment(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  function generateQR() {
-    if (totalAmount <= 0) {
-      alert("Please select photos first!");
-      return;
+  // Fetch unlocked photos
+  async function getUnlockedPhotos() {
+    const response = await fetch(
+      `${API_URL}/photos/unlocked/${paymentRequestId}`
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || "Could not unlock photos");
     }
 
-    setShowQR(true);
+    setUnlockedPhotos(data.photos);
+  }
+
+  // Check payment status
+  async function checkPaymentStatus() {
+    if (!paymentRequestId) return;
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch(
+        `${API_URL}/payments/${paymentRequestId}`
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Could not check payment");
+      }
+
+      setPaymentStatus(data.payment.status);
+
+      if (data.payment.status === "paid") {
+        await getUnlockedPhotos();
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Navigation
+  function changeTab(tab) {
+    setActiveTab(tab);
+    setShowPayment(false);
+    setSelectedPhotos([]);
+    setError("");
+    setSuccessMessage("");
+  }
+
+  function openGallery(eventId) {
+    setSelectedEventId(eventId);
+    setSelectedPhotos([]);
+    setShowPayment(false);
+    setError("");
+    setActiveTab("gallery");
   }
 
   return (
     <div className="app">
-      <aside className="sidebar">
-        <h2 className="logo">
-          Celebrare<span>.</span>
-        </h2>
-
-        <p className="menu-title">MENU</p>
-
-        <button
-          className={activeTab === "dashboard" ? "nav-item active" : "nav-item"}
-          onClick={() => {
-            setActiveTab("dashboard");
-            setShowPayment(false);
-            setShowQR(false);
-          }}
-        >
-          ◫ Dashboard
-        </button>
-
-        <button
-          className={activeTab === "gallery" ? "nav-item active" : "nav-item"}
-          onClick={() => {
-            setActiveTab("gallery");
-            setShowPayment(false);
-            setShowQR(false);
-          }}
-        >
-          ▧ Photo Gallery
-        </button>
-
-        <div className="sidebar-bottom">
-          <div className="profile">
-            <div className="avatar">P</div>
-            <div>
-              <strong>Photographer</strong>
-              <small>Pro Account</small>
-            </div>
-          </div>
-        </div>
-      </aside>
+      <Navbar
+        activeTab={activeTab}
+        onChangeTab={changeTab}
+      />
 
       <main className="main">
         <header className="topbar">
           <div>
             <p className="welcome">WELCOME TO CELEBRARE</p>
+
             <h1>
               {activeTab === "dashboard"
                 ? "Photographer Dashboard"
+                : activeTab === "manage"
+                ? "Manage Photos"
                 : showPayment
-                ? "Complete Your Payment"
-                : "Event Photo Gallery"}
+                ? "Payment Status"
+                : "Guest Photo Gallery"}
             </h1>
           </div>
 
@@ -150,222 +305,66 @@ function App() {
         </header>
 
         {activeTab === "dashboard" && (
-          <section>
-            <div className="hero">
-              <div>
-                <p className="hero-label">YOUR PHOTOGRAPHY BUSINESS</p>
-                <h2>
-                  Capture moments.
-                  <br />
-                  Share memories.
-                </h2>
-                <p>
-                  Manage your events and let guests purchase
-                  their favourite photos.
-                </p>
-                <button
-                  className="primary-btn"
-                  onClick={() => setActiveTab("gallery")}
-                >
-                  Explore Gallery →
-                </button>
-              </div>
-              <div className="hero-decoration">📸</div>
-            </div>
+          <Dashboard
+            events={events}
+            photos={photos}
+            pricePerPhoto={pricePerPhoto}
+            onOpenGallery={openGallery}
+            onManagePhotos={() => changeTab("manage")}
+          />
+        )}
 
-            <div className="section-heading">
-              <div>
-                <h2>Overview</h2>
-                <p>Here is your event summary.</p>
-              </div>
-            </div>
-
-            <div className="stats">
-              <div className="stat-card">
-                <span>📷</span>
-                <p>Total Photos</p>
-                <h2>248</h2>
-              </div>
-
-              <div className="stat-card">
-                <span>🎉</span>
-                <p>Total Events</p>
-                <h2>12</h2>
-              </div>
-
-              <div className="stat-card">
-                <span>🛒</span>
-                <p>Photo Price</p>
-                <h2>₹20</h2>
-              </div>
-            </div>
-
-            <div className="section-heading">
-              <div>
-                <h2>Your Events</h2>
-                <p>Manage your photography events.</p>
-              </div>
-
-              <button
-                className="secondary-btn"
-                onClick={() => setActiveTab("gallery")}
-              >
-                View Gallery
-              </button>
-            </div>
-
-            <div className="event-card">
-              <img src={photos[0].image} alt="Wedding event" />
-
-              <div className="event-info">
-                <span className="status">● Active Event</span>
-                <h3>Wedding Celebration 2026</h3>
-                <p>Event ID: CELEB001</p>
-                <p>6 sample photos available</p>
-
-                <button
-                  className="primary-btn"
-                  onClick={() => setActiveTab("gallery")}
-                >
-                  Open Event →
-                </button>
-              </div>
-            </div>
-          </section>
+        {activeTab === "manage" && (
+          <ManagePhotos
+            events={events}
+            selectedEventId={selectedEventId}
+            setSelectedEventId={setSelectedEventId}
+            selectedEvent={selectedEvent}
+            photos={photos}
+            photoUrl={photoUrl}
+            setPhotoUrl={setPhotoUrl}
+            addPhoto={addPhoto}
+            addingPhoto={addingPhoto}
+            successMessage={successMessage}
+          />
         )}
 
         {activeTab === "gallery" && (
-          <section>
-            {!showPayment ? (
-              <>
-                <div className="gallery-heading">
-                  <div>
-                    <span className="status">● Event Active</span>
-                    <h2>Wedding Celebration 2026</h2>
-                    <p>Select your favourite photos to continue.</p>
-                  </div>
+          showPayment ? (
+            <PaymentSection
+              photographerId={photographerId}
+              selectedEventId={selectedEventId}
+              selectedEvent={selectedEvent}
+              selectedPhotos={selectedPhotos}
+              pricePerPhoto={pricePerPhoto}
+              totalAmount={totalAmount}
+              paymentRequestId={paymentRequestId}
+              paymentStatus={paymentStatus}
+              loading={loading}
+              onBack={() => setShowPayment(false)}
+              onCheckPayment={checkPaymentStatus}
+              unlockedPhotos={unlockedPhotos}
+              error={error}
+            />
+          ) : (
+            <GuestGallery
+              events={events}
+              selectedEventId={selectedEventId}
+              setSelectedEventId={setSelectedEventId}
+              selectedEvent={selectedEvent}
+              photos={photos}
+              selectedPhotos={selectedPhotos}
+              togglePhoto={togglePhoto}
+              pricePerPhoto={pricePerPhoto}
+              totalAmount={totalAmount}
+              onContinue={createPaymentRequest}
+              loading={loading}
+            />
+          )
+        )}
 
-                  <div className="price-tag">₹20 / photo</div>
-                </div>
-
-                <div className="selection-info">
-                  <span>{selectedPhotos.length} photos selected</span>
-                  <strong>Total: ₹{totalAmount}</strong>
-                </div>
-
-                <div className="photo-grid">
-                  {photos.map((photo) => (
-                    <div
-                      className={
-                        selectedPhotos.includes(photo.id)
-                          ? "photo-card selected"
-                          : "photo-card"
-                      }
-                      key={photo.id}
-                      onClick={() => togglePhoto(photo.id)}
-                    >
-                      <img src={photo.image} alt={photo.name} />
-
-                      <div className="photo-caption">
-                        <span>{photo.name}</span>
-                        <span className="check">
-                          {selectedPhotos.includes(photo.id) ? "✓" : "+"}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="checkout-bar">
-                  <div>
-                    <strong>{selectedPhotos.length} Photos</strong>
-                    <p>₹{totalAmount} total amount</p>
-                  </div>
-
-                  <button className="primary-btn" onClick={openPayment}>
-                    Continue to Payment →
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div className="payment-card">
-                <button
-                  className="back-btn"
-                  onClick={() => {
-                    setShowPayment(false);
-                    setShowQR(false);
-                  }}
-                >
-                  ← Back to Gallery
-                </button>
-
-                <div className="payment-icon">₹</div>
-
-                <h2>Payment Summary</h2>
-                <p>Wedding Celebration 2026</p>
-
-                <div className="payment-details">
-                  <div>
-                    <span>Selected Photos</span>
-                    <strong>{selectedPhotos.length}</strong>
-                  </div>
-
-                  <div>
-                    <span>Price per Photo</span>
-                    <strong>₹{pricePerPhoto}</strong>
-                  </div>
-
-                  <div className="total-row">
-                    <span>Total Amount</span>
-                    <strong>₹{totalAmount}</strong>
-                  </div>
-                </div>
-
-                <div className="upi-note">
-                  <strong>Photographer UPI Details</strong>
-                  <p>Photographer: {photographerName}</p>
-                  <p>UPI ID: {photographerUPI}</p>
-                  <p>Amount: ₹{totalAmount}</p>
-                </div>
-
-                {!showQR ? (
-                  <button
-                    className="primary-btn pay-btn"
-                    onClick={generateQR}
-                  >
-                    Generate UPI QR Code
-                  </button>
-                ) : (
-                  <div className="qr-section">
-                    <h3>Scan UPI QR Code</h3>
-
-                    <QRCodeSVG
-                      value={upiPaymentLink}
-                      size={220}
-                      level="H"
-                      includeMargin={true}
-                    />
-
-                    <h3>₹{totalAmount}</h3>
-
-                    <p>Demo UPI payment request</p>
-
-                    <button
-                      className="back-btn"
-                      onClick={() => setShowQR(false)}
-                    >
-                      ← Back to Payment Summary
-                    </button>
-                  </div>
-                )}
-
-                <small className="demo-note">
-                  Demo only — no real payment verification or photo unlocking.
-                  Do not scan or pay using this sample UPI ID.
-                </small>
-              </div>
-            )}
-          </section>
+        {error && activeTab !== "gallery" && (
+          <p className="error-message">{error}</p>
         )}
       </main>
     </div>

@@ -178,6 +178,14 @@ router.post("/webhook/verify", async (req, res) => {
     const secret = process.env.BANK_WEBHOOK_SECRET;
     const signature = req.headers["x-webhook-signature"];
 
+    // Debugging logs
+    console.log("----- WEBHOOK DEBUG -----");
+    console.log("Secret loaded:", Boolean(secret));
+    console.log("Signature received:", Boolean(signature));
+    console.log("Raw body received:", Boolean(req.rawBody));
+    console.log("Raw body length:", req.rawBody?.length);
+    console.log("-------------------------");
+
     // Check authentication details
     if (!secret || !signature || !req.rawBody) {
       return res.status(401).json({
@@ -201,11 +209,15 @@ router.post("/webhook/verify", async (req, res) => {
       receivedBuffer.length !== expectedBuffer.length ||
       !timingSafeEqual(receivedBuffer, expectedBuffer)
     ) {
+      console.log("Webhook signature verification failed");
+
       return res.status(401).json({
         success: false,
         message: "Invalid webhook signature",
       });
     }
+
+    console.log("Webhook signature verified successfully");
 
     const {
       paymentRequestId,
