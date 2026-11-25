@@ -66,7 +66,7 @@ function PaymentSection({
         )}
 
         {paymentStatus === "paid" && (
-          <p>Demo payment verified!</p>
+          <p>Demo payment successful (simulated)!</p>
         )}
 
         {paymentStatus === "expired" && (

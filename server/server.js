@@ -8,6 +8,7 @@ import photographerRoutes from "./routes/photographerRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import eventRoutes from "./routes/eventRoutes.js";
 import photoRoutes from "./routes/photoRoutes.js";
+import bankEmailRoutes from "./routes/bankEmailRoutes.js";
 
 dotenv.config();
 
@@ -22,19 +23,25 @@ app.use(
     },
   })
 );
+
 // Photographer API Routes
 app.use("/api/photographers", photographerRoutes);
 
 // Payment API Routes
 app.use("/api/payments", paymentRoutes);
 
+// Event API Routes
 app.use("/api/events", eventRoutes);
 
 // Photo API Routes
 app.use("/api/photos", photoRoutes);
 
+// Demo Bank Email API Route
+app.use("/api/bank-email", bankEmailRoutes);
+
 // MongoDB Connection
-mongoose.connect(process.env.MONGO_URI)
+mongoose
+  .connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected Successfully!"))
   .catch((err) => console.log("MongoDB Error:", err.message));
 
@@ -47,7 +54,7 @@ app.get("/", (req, res) => {
 app.get("/api/health", (req, res) => {
   res.json({
     success: true,
-    message: "Celebrare API is working!"
+    message: "Celebrare API is working!",
   });
 });
 
@@ -55,7 +62,7 @@ app.get("/api/health", (req, res) => {
 app.get("/api/test", (req, res) => {
   res.json({
     project: "Celebrare",
-    message: "Backend is connected and responding."
+    message: "Backend is connected and responding.",
   });
 });
 
