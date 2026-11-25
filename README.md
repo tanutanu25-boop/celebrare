@@ -1,28 +1,33 @@
-
 # Celebrare 📸
+### A Smart Event Photography Platform
 
-**A Smart Event Photography Platform**
+Celebrare is a web-based event photography platform that helps guests browse event photos, select their favourite pictures, and access them through a photographer-specific payment workflow.
 
-Celebrare is a web-based event photography platform designed to make it easier for guests to find and access their event photos. It aims to help photographers manage photo access and receive payments directly through UPI.
+The platform connects photographers and guests through event galleries, dynamic pricing, payment request tracking, and demo payment validation.
 
-The platform is being developed with a focus on secure payment handling, photographer-specific payment details, and time-limited payment requests.
+**Project Status:** Under Development — Demo Payment Workflow
 
 ---
 
 ## 🚀 Project Overview
 
-At events, guests often find it difficult to search for their photographs and purchase them easily.
+Celebrare aims to simplify the process of finding and accessing event photographs.
 
-Celebrare aims to solve this problem by providing:
+### Key Features
 
-- An event photo gallery.
-- Multiple photo selection.
-- Photographer-specific UPI payment details.
-- Dynamic payment calculation.
-- UPI QR code generation.
-- Payment request creation and tracking.
-- Five-minute payment request expiry.
-- Secure webhook signature validation for a demo payment workflow.
+- Event-wise photo galleries
+- Multiple photo selection
+- Dynamic payment calculation
+- Photographer-specific UPI details
+- UPI payment link and QR generation (demo)
+- Unique payment request IDs
+- Five-minute payment request expiry
+- Payment status tracking
+- Demo bank transaction validation
+- Duplicate transaction protection
+- Payment-based photo access control
+
+---
 
 ## 🛠️ Tech Stack
 
@@ -41,11 +46,12 @@ Celebrare aims to solve this problem by providing:
 - Mongoose
 - REST APIs
 
-### Security
+### Security and Validation
 - HMAC-SHA256 signature validation
 - Unique transaction ID constraint
 - Server-side payment expiry validation
 - Photographer and amount matching
+- Atomic payment status updates
 
 ---
 
@@ -56,24 +62,29 @@ celebrare/
 │
 ├── client/
 │   ├── src/
+│   │   ├── components/
+│   │   │   ├── Navbar.jsx
+│   │   │   ├── Dashboard.jsx
+│   │   │   ├── EventList.jsx
+│   │   │   ├── GuestGallery.jsx
+│   │   │   ├── ManagePhotos.jsx
+│   │   │   ├── PaymentSection.jsx
+│   │   │   └── PhotoCard.jsx
 │   │   ├── App.jsx
-│   │   ├── App.css
-│   │   └── ...
-│   ├── package.json
-│   └── package-lock.json
+│   │   └── App.css
+│   └── package.json
 │
 ├── server/
 │   ├── models/
-│   │   ├── Payment.js
-│   │   └── Photographer.js
-│   │
 │   ├── routes/
 │   │   ├── paymentRoutes.js
-│   │   └── photographerRoutes.js
-│   │
+│   │   ├── photographerRoutes.js
+│   │   ├── eventRoutes.js
+│   │   ├── photoRoutes.js
+│   │   └── bankEmailRoutes.js
 │   ├── server.js
 │   ├── package.json
-│   └── .env (not committed)
+│   └── .env
 │
 └── README.md
 ```
@@ -82,81 +93,55 @@ celebrare/
 
 ## 🔄 Application Workflow
 
-### 1. Photographer Registration
+### 1. Photographer and Event Management
+- Photographers have unique IDs and UPI details.
+- Events are associated with photographers.
+- Event information is stored in MongoDB.
 
-A photographer registers with:
-- Photographer ID
-- Name
-- UPI ID
-
-The photographer details are stored in MongoDB.
-
-### 2. Photo Selection
-
-Guests open the event gallery and select the photographs they want to access.
-
-The total payment amount is calculated according to the selected photos.
+### 2. Guest Photo Selection
+- Guests open an event gallery.
+- Guests select multiple photographs.
+- The total amount is calculated dynamically.
 
 ### 3. Payment Request Creation
-
 The backend:
-- Identifies the photographer.
+- Validates photographer and event details.
 - Generates a unique payment request ID.
-- Calculates a five-minute expiry time.
-- Stores the payment request in MongoDB.
-- Generates a UPI payment link using the photographer's UPI details.
+- Stores the selected photo IDs.
+- Sets a five-minute expiry time.
+- Generates a photographer-specific UPI payment link.
 
 ### 4. UPI QR Generation
+The frontend generates a QR code using the UPI payment link.
 
-The frontend uses the UPI payment link to generate a QR code.
+**Note:** QR generation is part of the demo workflow. No real payment is collected.
 
-Each payment request contains the photographer's payment details and the requested amount.
+### 5. Demo Payment Validation
+The demo bank-email endpoint checks:
+- Payment request ID
+- Transaction ID
+- Payment amount
+- Recipient UPI ID
+- Payment status
+- Request expiry
+- Duplicate transaction IDs
 
-### 5. Payment Status Tracking
+Only a request that passes the demo validation checks is marked as paid.
 
-The backend maintains three payment statuses:
-
-| Status | Meaning |
-|---|---|
-| pending | Payment request is waiting for verification |
-| paid | Payment has been accepted by the verification workflow |
-| expired | Payment request has expired |
-
-### 6. Payment Verification (Demo)
-
-The backend includes a demo webhook verification endpoint.
-
-It checks:
-- HMAC-SHA256 signature.
-- Payment request ID.
-- Photographer ID.
-- Payment amount.
-- Payment expiry.
-- Duplicate transaction ID.
-
-A payment is updated to `paid` only if these checks pass.
-
-**Important:** This is currently a demo webhook workflow. HMAC validation authenticates a sender that knows the shared secret; it does not independently prove that money was received by a bank. Real bank or authenticated payment-provider integration is still required.
+### 6. Photo Access
+- Pending requests cannot unlock selected photos.
+- Expired requests cannot unlock selected photos.
+- Demo-paid requests can access their selected photos.
 
 ---
 
-## 🔁 Workflow Diagram
+## 💳 Payment Status
 
-```mermaid
-flowchart TD
-    A[Guest opens Celebrare] --> B[View Event Gallery]
-    B --> C[Select Photos]
-    C --> D[Calculate Total Amount]
-    D --> E[Create Payment Request]
-    E --> F[Generate Payment ID]
-    F --> G[Set 5-Minute Expiry]
-    G --> H[Generate UPI Link and QR]
-    H --> I[Payment Status: Pending]
-    I --> J[Trusted Verification Workflow]
-    J --> K{All Checks Pass?}
-    K -->|Yes| L[Payment Status: Paid]
-    K -->|No / Expired| M[Reject or Expire Request]
-```
+| Status | Meaning |
+|---|---|
+| pending | Waiting for demo validation |
+| paid | Accepted by the demo validation workflow |
+| expired | Payment request has expired |
 
 ---
 
@@ -165,30 +150,37 @@ flowchart TD
 Base URL:
 
 ```text
-http://localhost:5000
+http://localhost:5000/api
 ```
-
-### Photographer APIs
-
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/api/photographers/register` | Register a photographer |
-| GET | `/api/photographers/:photographerId` | Get photographer details |
 
 ### Payment APIs
 
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/payments/create` | Create a payment request |
-| GET | `/api/payments/:paymentRequestId` | Check payment status and expiry |
-| POST | `/api/payments/webhook/verify` | Verify a signed demo webhook |
+| POST | `/payments/create` | Create a payment request |
+| GET | `/payments/:paymentRequestId` | Check payment status |
+| POST | `/payments/webhook/verify` | Validate a signed demo webhook |
 
-### Health APIs
+### Bank Email Demo API
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/health` | Check backend health |
-| GET | `/api/test` | Test backend response |
+| POST | `/bank-email/demo` | Validate fictional demo transaction data |
+
+### Event APIs
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/events/register` | Register an event |
+| GET | `/events/photographer/:photographerId` | Get photographer's events |
+
+### Photo APIs
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/photos/add` | Add an event photo |
+| GET | `/photos/event/:eventId` | Get event photos |
+| GET | `/photos/unlocked/:paymentRequestId` | Get selected photos after demo payment |
 
 ---
 
@@ -196,53 +188,40 @@ http://localhost:5000
 
 ### Prerequisites
 
-Install the following:
-
 - Node.js
 - npm
 - MongoDB
 - Git
 
-### 1. Clone the Repository
+### 1. Clone Repository
 
 ```bash
 git clone https://github.com/tanutanu25-boop/celebrare.git
 ```
 
-### 2. Open Project Folder
+### 2. Open Project
 
 ```bash
 cd celebrare
 ```
 
-### 3. Setup Frontend
+### 3. Setup Backend
 
 ```bash
-cd client
-npm install
-npm run dev
-```
-
-Open the local URL shown by Vite in your browser.
-
-### 4. Setup Backend
-
-Open another terminal:
-
-```bash
-cd ~/celebrare/server
+cd server
 npm install
 ```
 
-Create a `.env` file inside the server folder:
+Create a `.env` file inside the `server` directory:
 
 ```env
 PORT=5000
 MONGO_URI=your_mongodb_connection_string
 BANK_WEBHOOK_SECRET=your_private_random_secret
+DEMO_MODE=true
 ```
 
-Replace the placeholder values with your own configuration. Never upload `.env` to GitHub.
+Replace the placeholder values with your own local configuration. Never commit `.env` or share private secrets.
 
 Start the backend:
 
@@ -250,68 +229,97 @@ Start the backend:
 node server.js
 ```
 
-Backend runs on:
+### 4. Setup Frontend
 
-```text
-http://localhost:5000
+Open another terminal:
+
+```bash
+cd ~/celebrare/client
+npm install
+npm run dev
 ```
 
----
-
-## 🔐 Security Considerations
-
-Celebrare includes several security checks in its demo payment workflow:
-
-- Unique payment request IDs.
-- Server-side five-minute expiry validation.
-- Photographer ID validation.
-- Amount matching.
-- HMAC-SHA256 webhook signature validation.
-- Duplicate transaction ID protection using a MongoDB unique constraint.
-- Atomic payment status updates.
-
-The current webhook is a demonstration, not a production bank integration.
-
-For production use, authenticated bank or payment-provider notifications, transaction reconciliation, secure secret management, and additional monitoring are required.
+Open the local URL displayed by Vite in your browser.
 
 ---
 
-## 📌 Current Development Status
+## 🧪 Demo Testing
+
+The following scenarios have been tested using fictional demo transaction data:
+
+| Test Case | Expected Result |
+|---|---|
+| Correct amount and UPI ID | Demo payment accepted |
+| Incorrect amount | Request rejected |
+| Incorrect recipient UPI ID | Request rejected |
+| Duplicate transaction ID | HTTP 409 Conflict |
+| Expired payment request | Payment rejected |
+| Pending payment | Photos remain locked |
+| Demo-paid payment | Selected photos become accessible |
+
+All payment tests use demo data. No real UPI payment is performed.
+
+---
+
+## 🔐 Security Considerations and Limitations
+
+Celebrare currently implements several validation mechanisms in its demo workflow:
+
+- Unique payment request IDs
+- Five-minute server-side expiry validation
+- Photographer and amount matching
+- HMAC-SHA256 signature validation
+- Duplicate transaction ID protection
+- Atomic payment status updates
+- Payment-based photo access control
+
+**Important:** The current bank-email route accepts fictional demo transaction data. HMAC authenticates a sender possessing the shared secret; it does not independently prove that a bank received money.
+
+Cloudflare or email forwarding alone does not establish genuine bank payment confirmation.
+
+Real bank or authenticated payment-provider integration, transaction reconciliation, access controls, and production security measures are still required before real payments can be supported.
+
+---
+
+## 📌 Development Status
 
 ### Implemented
 
-- [x] React frontend setup
+- [x] React frontend
 - [x] Event photo gallery
 - [x] Multiple photo selection
 - [x] Dynamic price calculation
-- [x] UPI QR code generation (demo)
-- [x] Express backend setup
-- [x] MongoDB connection
-- [x] Photographer registration API
-- [x] Photographer details API
-- [x] Payment request creation API
-- [x] UPI payment link generation
-- [x] Five-minute payment expiry validation
-- [x] HMAC demo webhook signature validation
-- [x] Duplicate transaction ID protection
+- [x] UPI link and QR generation (demo)
+- [x] Express backend
+- [x] MongoDB integration
+- [x] Photographer APIs
+- [x] Event management APIs
+- [x] Photo management APIs
+- [x] Payment request creation
+- [x] Five-minute payment expiry
+- [x] Payment status tracking
+- [x] HMAC demo webhook validation
+- [x] Bank email demo validation route
+- [x] Duplicate transaction protection
+- [x] Payment-based photo unlocking
+- [x] Responsive frontend UI
 
 ### Future Improvements
 
-- [ ] Real bank/payment-provider integration
 - [ ] Authenticated bank email processing
+- [ ] Real bank/payment-provider integration
 - [ ] Reliable transaction reconciliation
-- [ ] Frontend payment status integration
-- [ ] Verified payment-based photo unlocking
-- [ ] Photographer dashboard
-- [ ] Event management system
-- [ ] Automated payment status updates
+- [ ] Photographer authentication and authorization
+- [ ] Production-ready payment verification
+- [ ] Automated payment notifications
 - [ ] Production deployment
+- [ ] Improved monitoring and error handling
 
 ---
 
 ## 🎯 Project Goal
 
-The goal of Celebrare is to simplify event photography access and payment management by connecting guests and photographers through a convenient and secure digital platform.
+The goal of Celebrare is to simplify event photography access and payment management by connecting guests and photographers through a convenient digital platform.
 
 ---
 
@@ -320,6 +328,6 @@ The goal of Celebrare is to simplify event photography access and payment manage
 **Project:** Celebrare  
 **Repository:** https://github.com/tanutanu25-boop/celebrare
 
-Built with React, Node.js, Express, and MongoDB.
+**Built with:** React.js, Node.js, Express.js, and MongoDB.
 
-*This project is currently under development.*
+*This project is currently under development. Payment verification is simulated for demonstration purposes only.*
