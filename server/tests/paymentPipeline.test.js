@@ -433,10 +433,20 @@ assert.equal(statusRes.body.event.eventDate, undefined);
     assert.ok(auditEntry);
   });
 
-  it("Rejects unauthenticated or forged Cloudflare webhook requests", async () => {
+  
+  it("Rejects Cloudflare webhook requests when timestamp is missing", async () => {
+    const payload = { utr: "TEST-MISSING-TIMESTAMP-123", amount: 100 };
+    const raw = JSON.stringify(payload);
+    const sig =
+      "sha256=" +
+      createHmac("sha256", CF_SECRET).update(raw).digest("hex");
+
     const res = await request(app)
       .post("/api/webhooks/bank-email")
-      .send({ utr: "FAKE-123" });
+      .set("Content-Type", "application/json")
+      .set("X-CF-Worker-Signature", sig)
+      .send(raw);
+
     assert.equal(res.status, 401);
   });
 });

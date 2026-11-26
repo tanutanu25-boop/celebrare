@@ -25,17 +25,27 @@ function verifyCloudflareWorkerSignature(req) {
   }
 
   // Optional replay protection when Cloudflare Worker sends X-CF-Timestamp
+  
+    // Mandatory timestamp validation + replay protection
   const tsHeader = req.headers["x-cf-timestamp"];
-  if (tsHeader) {
-    const tsMs = Number(tsHeader);
-    if (!Number.isFinite(tsMs) || Math.abs(Date.now() - tsMs) > 5 * 60 * 1000) {
-      return { ok: false, reason: "Stale Cloudflare Worker timestamp" };
-    }
+
+  if (!tsHeader) {
+    return { ok: false, reason: "Missing Cloudflare Worker timestamp" };
   }
 
-  const signedContent = tsHeader
-    ? `${tsHeader}.${req.rawBody.toString("utf8")}`
-    : req.rawBody;
+  const tsMs = Number(tsHeader);
+
+  if (
+    !Number.isFinite(tsMs) ||
+    tsMs <= 0 ||
+    Math.abs(Date.now() - tsMs) > 5 * 60 * 1000
+  ) {
+    return { ok: false, reason: "Invalid or stale Cloudflare Worker timestamp" };
+  }
+
+  
+
+   const signedContent = `${tsHeader}.${req.rawBody.toString("utf8")}`;
 
   const expected =
     "sha256=" +
