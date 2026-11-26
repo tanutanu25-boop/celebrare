@@ -1,349 +1,310 @@
-
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { io } from "socket.io-client";
+import { API_BASE, apiRequest, getAuthToken, setAuthToken } from "./api";
+import Navbar from "./components/Navbar";
+import GuestGallery from "./components/GuestGallery";
+import PaymentSection from "./components/PaymentSection";
+import Dashboard from "./components/Dashboard";
+import AdminReview from "./components/AdminReview";
+import DemoLab from "./components/DemoLab";
+import { ToastContainer } from "./components/Toast";
 import "./App.css";
 
-import Navbar from "./components/Navbar";
-import Dashboard from "./components/Dashboard";
-import GuestGallery from "./components/GuestGallery";
-import ManagePhotos from "./components/ManagePhotos";
-import PaymentSection from "./components/PaymentSection";
-
-const API_URL = "http://localhost:5000/api";
-
 function App() {
-  const photographerId = "photo101";
-  const guestId = "guest105";
-  const pricePerPhoto = 20;
-
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const [activeTab, setActiveTab] = useState("gallery");
+  const [demoMode, setDemoMode] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
 
   const [events, setEvents] = useState([]);
   const [selectedEventId, setSelectedEventId] = useState("");
-
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [eventPhotographer, setEventPhotographer] = useState(null);
   const [photos, setPhotos] = useState([]);
   const [selectedPhotos, setSelectedPhotos] = useState([]);
+  const [guestEmail, setGuestEmail] = useState("guest@celebrare.demo");
 
-  const [photoUrl, setPhotoUrl] = useState("");
-  const [addingPhoto, setAddingPhoto] = useState(false);
-  const [successMessage, setSuccessMessage] = useState("");
-
-  const [paymentRequestId, setPaymentRequestId] = useState("");
-  const [paymentStatus, setPaymentStatus] = useState("");
-  const [unlockedPhotos, setUnlockedPhotos] = useState([]);
   const [showPayment, setShowPayment] = useState(false);
+  const [activeOrder, setActiveOrder] = useState(null);
+  const [activePayment, setActivePayment] = useState(null);
+  const [paymentPhotographer, setPaymentPhotographer] = useState(null);
+  const [paymentEvent, setPaymentEvent] = useState(null);
+  const [downloads, setDownloads] = useState([]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [toasts, setToasts] = useState([]);
 
-  const selectedEvent = events.find(
-    (event) => event.eventId === selectedEventId
-  );
+  const socketRef = useRef(null);
 
-  const totalAmount = selectedPhotos.length * pricePerPhoto;
-
-  // Fetch events
-  useEffect(() => {
-    async function fetchEvents() {
-      try {
-        const response = await fetch(
-          `${API_URL}/events/photographer/${photographerId}`
-        );
-
-        const data = await response.json();
-
-        if (!response.ok || !data.success) {
-          throw new Error(data.message || "Could not load events");
-        }
-
-        setEvents(data.events);
-
-        if (data.events.length > 0) {
-          setSelectedEventId(data.events[0].eventId);
-        }
-      } catch (err) {
-        setError(err.message);
-      }
-    }
-
-    fetchEvents();
+  const notify = useCallback((message, type = "info") => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    setToasts((prev) => [...prev.slice(-3), { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4500);
   }, []);
 
-  // Fetch photos
+  // Load health/demo mode & restore auth session + active events
   useEffect(() => {
-    if (!selectedEventId) {
-      setPhotos([]);
-      return;
+    apiRequest("/health")
+      .then((h) => setDemoMode(Boolean(h.demoMode)))
+      .catch(() => {});
+
+    if (getAuthToken()) {
+      apiRequest("/auth/me")
+        .then((res) => setCurrentUser(res.user))
+        .catch(() => setAuthToken(""));
     }
 
-    async function fetchPhotos() {
-      try {
-        setLoading(true);
-        setError("");
-
-        const response = await fetch(
-          `${API_URL}/photos/event/${selectedEventId}`
-        );
-
-        const data = await response.json();
-
-        if (!response.ok || !data.success) {
-          throw new Error(data.message || "Could not load photos");
+    apiRequest("/events")
+      .then((res) => {
+        setEvents(res.events || []);
+        if (res.events?.length > 0) {
+          setSelectedEventId((prev) => prev || res.events[0].eventId);
         }
+      })
+      .catch((err) => setError(err.message));
+  }, []);
 
-        setPhotos(data.photos);
+  // Load gallery when selectedEventId changes
+  useEffect(() => {
+    if (!selectedEventId) return;
+    let cancelled = false;
+    apiRequest(`/events/${selectedEventId}/gallery`)
+      .then((data) => {
+        if (cancelled) return;
+        setError("");
+        setSelectedEvent(data.event);
+        setEventPhotographer(data.photographer);
+        setPhotos(data.photos || []);
         setSelectedPhotos([]);
-      } catch (err) {
-        setError(err.message);
-        setPhotos([]);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchPhotos();
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.message);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [selectedEventId]);
 
-  // Refresh photos
-  async function refreshPhotos() {
-    if (!selectedEventId) return;
-
-    const response = await fetch(
-      `${API_URL}/photos/event/${selectedEventId}`
-    );
-
-    const data = await response.json();
-
-    if (!response.ok || !data.success) {
-      throw new Error(data.message || "Could not refresh photos");
-    }
-
-    setPhotos(data.photos);
-  }
-
-  // Add photo
-  async function addPhoto(event) {
-    event.preventDefault();
-
-    if (!selectedEventId || !photoUrl.trim()) {
-      setError("Please select an event and enter an image URL");
-      return;
-    }
-
-    setAddingPhoto(true);
-    setError("");
-    setSuccessMessage("");
-
+  const fetchSignedDownloads = useCallback(async (orderId) => {
+    if (!orderId) return;
     try {
-      const response = await fetch(`${API_URL}/photos/add`, {
+      const data = await apiRequest(`/orders/${orderId}/downloads`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          eventId: selectedEventId,
-          photoUrl: photoUrl.trim(),
-        }),
       });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "Could not add photo");
-      }
-
-      setPhotoUrl("");
-      setSuccessMessage("Photo added successfully!");
-
-      await refreshPhotos();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setAddingPhoto(false);
+      setDownloads(data.downloads || []);
+    } catch {
+      // Locked until PAID
     }
-  }
+  }, []);
 
-  // Select or unselect photo
+  const syncPaymentStatus = useCallback(
+    async (requestId) => {
+      const id = requestId || activePayment?.paymentRequestId;
+      if (!id) return;
+      try {
+        const data = await apiRequest(`/payment-requests/${id}/status`);
+        setActivePayment(data.payment);
+        setActiveOrder(data.order);
+        if (data.photographer) setPaymentPhotographer(data.photographer);
+        if (data.event) setPaymentEvent(data.event);
+        if (data.payment?.status === "PAID" && data.order?.orderId) {
+          await fetchSignedDownloads(data.order.orderId);
+        }
+      } catch (err) {
+        setError(err.message);
+      }
+    },
+    [activePayment?.paymentRequestId, fetchSignedDownloads]
+  );
+
+  // Socket.IO connection for real-time order updates + reliable polling fallback
+  useEffect(() => {
+    const socket = io(API_BASE, { transports: ["websocket", "polling"] });
+    socketRef.current = socket;
+
+    socket.on("payment:status", (payload) => {
+      if (payload?.paymentRequestId) {
+        syncPaymentStatus(payload.paymentRequestId);
+        notify(
+          `Payment update: ${payload.status}`,
+          payload.status === "PAID" ? "success" : "info"
+        );
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [syncPaymentStatus, notify]);
+
+  useEffect(() => {
+    const reqId = activePayment?.paymentRequestId;
+    if (!reqId || !socketRef.current) return;
+
+    socketRef.current.emit("join:order", reqId);
+    const poll = setInterval(() => {
+      if (activePayment?.status === "PENDING") {
+        syncPaymentStatus(reqId);
+      }
+    }, 5000);
+
+    return () => {
+      socketRef.current?.emit("leave:order", reqId);
+      clearInterval(poll);
+    };
+  }, [activePayment?.paymentRequestId, activePayment?.status, syncPaymentStatus]);
+
   function togglePhoto(photoId) {
-    setSelectedPhotos((previous) =>
-      previous.includes(photoId)
-        ? previous.filter((id) => id !== photoId)
-        : [...previous, photoId]
+    setSelectedPhotos((prev) =>
+      prev.includes(photoId)
+        ? prev.filter((id) => id !== photoId)
+        : [...prev, photoId]
     );
   }
 
-  // Create payment request (demo only)
-  async function createPaymentRequest() {
+  async function handleCreateOrder() {
     if (selectedPhotos.length === 0) {
-      setError("Please select at least one photo!");
+      notify("Select at least one photo", "error");
       return;
     }
-
     setLoading(true);
     setError("");
-
     try {
-      const response = await fetch(`${API_URL}/payments/create`, {
+      const data = await apiRequest("/orders", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({
-          photographerId,
           eventId: selectedEventId,
-          guestId,
-          amount: totalAmount,
           selectedPhotoIds: selectedPhotos,
+          guestEmail,
         }),
       });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "Payment request failed");
-      }
-
-      setPaymentRequestId(data.payment.paymentRequestId);
-      setPaymentStatus(data.payment.status);
-      setUnlockedPhotos([]);
+      setActiveOrder(data.order);
+      setActivePayment(data.payment);
+      setPaymentPhotographer(data.photographer);
+      setPaymentEvent(data.event);
+      setDownloads([]);
       setShowPayment(true);
+      notify("5-minute UPI payment request created", "success");
     } catch (err) {
       setError(err.message);
+      notify(err.message, "error");
     } finally {
       setLoading(false);
     }
   }
 
-  // Fetch unlocked photos
-  async function getUnlockedPhotos() {
-    const response = await fetch(
-      `${API_URL}/photos/unlocked/${paymentRequestId}`
-    );
-
-    const data = await response.json();
-
-    if (!response.ok || !data.success) {
-      throw new Error(data.message || "Could not unlock photos");
-    }
-
-    setUnlockedPhotos(data.photos);
-  }
-
-  // Check payment status
-  async function checkPaymentStatus() {
-    if (!paymentRequestId) return;
-
+  async function handleCreateNewRequest() {
+    if (!activePayment?.paymentRequestId) return;
     setLoading(true);
-    setError("");
-
     try {
-      const response = await fetch(
-        `${API_URL}/payments/${paymentRequestId}`
+      const data = await apiRequest(
+        `/payment-requests/${activePayment.paymentRequestId}/new-request`,
+        { method: "POST" }
       );
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "Could not check payment");
-      }
-
-      setPaymentStatus(data.payment.status);
-
-      if (data.payment.status === "paid") {
-        await getUnlockedPhotos();
-      }
+      setActiveOrder(data.order);
+      setActivePayment(data.payment);
+      setDownloads([]);
+      notify("Created a fresh 5-minute payment request", "success");
     } catch (err) {
-      setError(err.message);
+      notify(err.message, "error");
     } finally {
       setLoading(false);
     }
   }
 
-  // Navigation
-  function changeTab(tab) {
-    setActiveTab(tab);
-    setShowPayment(false);
-    setSelectedPhotos([]);
-    setError("");
-    setSuccessMessage("");
+  async function handleQuickCreateDemoOrder(eventId) {
+    try {
+      const data = await apiRequest("/orders", {
+        method: "POST",
+        body: JSON.stringify({
+          eventId,
+          selectedPhotoIds: [1, 2],
+          guestEmail: "demo.guest@celebrare.demo",
+        }),
+      });
+      setActiveOrder(data.order);
+      setActivePayment(data.payment);
+      setPaymentPhotographer(data.photographer);
+      setPaymentEvent(data.event);
+      setDownloads([]);
+      notify(`Created order ${data.order.orderId} for ${eventId}`, "success");
+      return data.payment.paymentRequestId;
+    } catch (err) {
+      notify(err.message, "error");
+      return null;
+    }
   }
 
-  function openGallery(eventId) {
-    setSelectedEventId(eventId);
-    setSelectedPhotos([]);
-    setShowPayment(false);
-    setError("");
-    setActiveTab("gallery");
+  function handleAuthSuccess(token, user) {
+    setAuthToken(token);
+    setCurrentUser(user);
+  }
+
+  function handleLogout() {
+    setAuthToken("");
+    setCurrentUser(null);
+    notify("Signed out", "info");
   }
 
   return (
     <div className="app">
       <Navbar
         activeTab={activeTab}
-        onChangeTab={changeTab}
+        onChangeTab={(tab) => {
+          setActiveTab(tab);
+          setError("");
+        }}
+        currentUser={currentUser}
+        demoMode={demoMode}
+        onLogout={handleLogout}
       />
 
       <main className="main">
+        {demoMode && (
+          <div className="demo-banner" role="status">
+            <strong>DEMO MODE — No real money is being transferred.</strong>
+            <span>
+              Use Demo Scenario Lab (A–E) to send simulated bank emails through
+              the live verification pipeline.
+            </span>
+          </div>
+        )}
+
         <header className="topbar">
           <div>
-            <p className="welcome">WELCOME TO CELEBRARE</p>
-
+            <p className="welcome">CELEBRARE DIRECT UPI PHOTO MARKETPLACE</p>
             <h1>
-              {activeTab === "dashboard"
-                ? "Photographer Dashboard"
-                : activeTab === "manage"
-                ? "Manage Photos"
-                : showPayment
-                ? "Payment Status"
-                : "Guest Photo Gallery"}
+              {activeTab === "gallery"
+                ? showPayment
+                  ? "Direct UPI Checkout & Verification"
+                  : "Event Photo Gallery"
+                : activeTab === "dashboard"
+                ? "Photographer Studio Dashboard"
+                : activeTab === "admin"
+                ? "Admin Payment Review & Audit"
+                : "Demo Scenario Lab (A–E)"}
             </h1>
-          </div>
-
-          <div className="top-profile">
-            <span>🔔</span>
-            <div className="avatar">P</div>
           </div>
         </header>
 
-        {activeTab === "dashboard" && (
-          <Dashboard
-            events={events}
-            photos={photos}
-            pricePerPhoto={pricePerPhoto}
-            onOpenGallery={openGallery}
-            onManagePhotos={() => changeTab("manage")}
-          />
-        )}
-
-        {activeTab === "manage" && (
-          <ManagePhotos
-            events={events}
-            selectedEventId={selectedEventId}
-            setSelectedEventId={setSelectedEventId}
-            selectedEvent={selectedEvent}
-            photos={photos}
-            photoUrl={photoUrl}
-            setPhotoUrl={setPhotoUrl}
-            addPhoto={addPhoto}
-            addingPhoto={addingPhoto}
-            successMessage={successMessage}
-          />
-        )}
-
-        {activeTab === "gallery" && (
-          showPayment ? (
+        {activeTab === "gallery" &&
+          (showPayment ? (
             <PaymentSection
-              photographerId={photographerId}
-              selectedEventId={selectedEventId}
-              selectedEvent={selectedEvent}
-              selectedPhotos={selectedPhotos}
-              pricePerPhoto={pricePerPhoto}
-              totalAmount={totalAmount}
-              paymentRequestId={paymentRequestId}
-              paymentStatus={paymentStatus}
+              payment={activePayment}
+              order={activeOrder}
+              photographer={paymentPhotographer}
+              event={paymentEvent}
+              downloads={downloads}
               loading={loading}
               onBack={() => setShowPayment(false)}
-              onCheckPayment={checkPaymentStatus}
-              unlockedPhotos={unlockedPhotos}
+              onRefreshStatus={() => syncPaymentStatus()}
+              onCreateNewRequest={handleCreateNewRequest}
+              onRequestDownloads={() =>
+                fetchSignedDownloads(activeOrder?.orderId)
+              }
+              onNotify={notify}
               error={error}
             />
           ) : (
@@ -352,21 +313,67 @@ function App() {
               selectedEventId={selectedEventId}
               setSelectedEventId={setSelectedEventId}
               selectedEvent={selectedEvent}
+              photographer={eventPhotographer}
               photos={photos}
               selectedPhotos={selectedPhotos}
               togglePhoto={togglePhoto}
-              pricePerPhoto={pricePerPhoto}
-              totalAmount={totalAmount}
-              onContinue={createPaymentRequest}
+              clearSelection={() => setSelectedPhotos([])}
+              guestEmail={guestEmail}
+              setGuestEmail={setGuestEmail}
+              onCreateOrder={handleCreateOrder}
               loading={loading}
             />
-          )
+          ))}
+
+        {activeTab === "dashboard" && (
+          <Dashboard
+            currentUser={currentUser}
+            demoMode={demoMode}
+            onAuthSuccess={handleAuthSuccess}
+            onNotify={notify}
+            onOpenGallery={(evId) => {
+              setSelectedEventId(evId);
+              setShowPayment(false);
+              setActiveTab("gallery");
+            }}
+          />
+        )}
+
+        {activeTab === "admin" && (
+          <AdminReview
+            currentUser={currentUser}
+            demoMode={demoMode}
+            onAuthSuccess={handleAuthSuccess}
+            onNotify={notify}
+          />
+        )}
+
+        {activeTab === "demo" && demoMode && (
+          <DemoLab
+            activePayment={activePayment}
+            events={events}
+            onSyncPayment={syncPaymentStatus}
+            onOpenPaymentTab={async (reqId) => {
+              await syncPaymentStatus(reqId);
+              setShowPayment(true);
+              setActiveTab("gallery");
+            }}
+            onSelectEventAndCreateDemoOrder={handleQuickCreateDemoOrder}
+            onNotify={notify}
+          />
         )}
 
         {error && activeTab !== "gallery" && (
           <p className="error-message">{error}</p>
         )}
       </main>
+
+      <ToastContainer
+        toasts={toasts}
+        onDismiss={(id) =>
+          setToasts((prev) => prev.filter((t) => t.id !== id))
+        }
+      />
     </div>
   );
 }
