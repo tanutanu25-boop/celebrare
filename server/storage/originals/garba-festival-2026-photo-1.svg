@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800">
+  <defs>
+    <linearGradient id="bg-1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4c1d95" />
+      <stop offset="55%" stop-color="#9333ea" />
+      <stop offset="100%" stop-color="#f43f5e" />
+    </linearGradient>
+    <radialGradient id="glow-1" cx="35%" cy="30%" r="65%">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.45)" />
+      <stop offset="100%" stop-color="rgba(255,255,255,0)" />
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="800" fill="url(#bg-1)" />
+  <rect width="1200" height="800" fill="url(#glow-1)" />
+  <circle cx="357" cy="281" r="170" fill="rgba(255,255,255,0.14)" />
+  <circle cx="797" cy="473" r="120" fill="rgba(15,23,42,0.18)" />
+  <path d="M0 640 Q 320 510 620 620 T 1200 570 L 1200 800 L 0 800 Z" fill="rgba(15, 23, 42, 0.28)" />
+  <rect x="44" y="44" width="230" height="38" rx="19" fill="rgba(255,255,255,0.22)" />
+  <text x="64" y="69" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="#ffffff">Garba Festival</text>
+  <text x="60" y="395" font-family="Georgia, serif" font-size="56" font-weight="700" fill="#ffffff">Garba Spin Motion</text>
+  <text x="60" y="445" font-family="Arial, sans-serif" font-size="24" fill="rgba(255,255,255,0.88)">Shot by Aarav Photography • Frame #1</text>
+  
+    <g opacity="0.9">
+      <rect x="44" y="718" width="420" height="44" rx="10" fill="rgba(15, 23, 42, 0.55)" />
+      <text x="64" y="746" font-family="Arial, sans-serif" font-size="18" font-weight="600" fill="#f8fafc">Aarav Photography • Original Licensed Print #1</text>
+    </g>
+    
+</svg>

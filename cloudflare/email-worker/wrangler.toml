@@ -1,0 +1,11 @@
+name = "celebrare-bank-email-worker"
+main = "src/index.js"
+compatibility_date = "2025-10-01"
+
+[vars]
+WORKER_ID = "celebrare-cf-email-worker"
+# Set in Cloudflare Dashboard or wrangler.toml [vars] for your deployed backend:
+# BACKEND_WEBHOOK_URL = "https://api.your-celebrare-domain.com/api/webhooks/bank-email"
+
+# Store the shared HMAC secret with:
+# npx wrangler secret put CLOUDFLARE_EMAIL_WEBHOOK_SECRET
